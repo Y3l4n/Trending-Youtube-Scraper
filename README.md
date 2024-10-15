@@ -30,6 +30,8 @@ The script is fairly simple to run, it takes the following optional parameters:
 * `--country_code_path` which takes a path argument that targets the text file containing the list of country codes to target. By default this is `country_codes.txt` in the current directory.
 * `--output_dir` which takes a path argument that specifies the folder to create the output CSV files for each country. By default this is `output/` in the current directory.
 
+After adding in your API key and country codes, run the `scraper_updated.py` file to retrieve the results
+
 ## License
 
 This project is licensed under the BSD 2-Clause License - see the LICENSE.md file for details
