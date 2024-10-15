@@ -1,6 +1,6 @@
 # Trending YouTube Video Scraper
 
-All credits go to [mitchelljy's Youtube Scraper](https://github.com/mitchelljy/Trending-YouTube-Scraper), this is just an updated version of it
+All credits go to [mitchelljy's Youtube Scraper](https://github.com/mitchelljy/Trending-YouTube-Scraper), this is just an updated version of it.
 
 Originally used to build [this dataset](https://www.kaggle.com/datasnaek/youtube-new) on Kaggle, which has about 6 months worth of trending YouTube videos on it. This script will scrape the most relevant information from videos that are currently trending on YouTube in a specified set of countries. You can find example output files in the output directory.
 
