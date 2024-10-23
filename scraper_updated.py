@@ -11,9 +11,8 @@ snippet_features = ["title", "publishedAt", "channelId", "channelTitle"]
 unsafe_characters = ['\n', '"']
 
 # Column headers
-header = ["video_id"] + snippet_features + ["category", "trending_date", "tags", "view_count", "likes", "dislikes",
-                                            "comment_count", "thumbnail_link", "comments_disabled",
-                                            "ratings_disabled", "description"]
+header = ["video_id"] + snippet_features + ["category", "trending_date", "tags", "duration", "view_count", "likes", "dislikes",
+                                            "comment_count", "subscriber_count", "engagement_rate", "thumbnail_link", "description", "region_restriction"]
 
 # Category mapping
 category_mapping = {
@@ -60,17 +59,14 @@ def setup(api_path, code_path):
 
     return api_key, country_codes
 
-
 def prepare_feature(feature):
-    for ch in unsafe_characters:
-        feature = str(feature).replace(ch, "")
+    feature = str(feature).replace('"', '""')  # Escape quotes for CSV
     return f'"{feature}"'
-
 
 def api_request(api_key, page_token, country_code):
     request_url = (
         f"https://www.googleapis.com/youtube/v3/videos"
-        f"?part=snippet,statistics&chart=mostPopular"
+        f"?part=snippet,statistics,contentDetails&chart=mostPopular"
         f"&regionCode={country_code}&maxResults=50"
         f"&key={api_key}"
     )
@@ -80,7 +76,7 @@ def api_request(api_key, page_token, country_code):
     request = requests.get(request_url)
 
     if request.status_code == 429:
-        print("Temp-Banned due to excess requests, please wait and continue later")
+        print("Temp-banned due to excess requests, please wait and continue later")
         sys.exit()
     elif request.status_code != 200:
         print(f"Error: {request.status_code} - {request.text}")
@@ -88,23 +84,35 @@ def api_request(api_key, page_token, country_code):
 
     return request.json()
 
-
 def get_tags(tags_list):
     return prepare_feature("|".join(tags_list))
 
+def get_subscriber_count(api_key, channel_id):
+    url = (
+        f"https://www.googleapis.com/youtube/v3/channels"
+        f"?part=statistics&id={channel_id}&key={api_key}"
+    )
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        return data['items'][0]['statistics'].get('subscriberCount', 0)
+    else:
+        print(f"Error fetching subscriber count: {response.status_code}")
+        return 0
 
-def get_videos(items):
+def get_videos(api_key, items):
     lines = []
     for video in items:
         comments_disabled = False
         ratings_disabled = False
 
-        if "statistics" not in video:
+        if "statistics" not in video or "contentDetails" not in video:
             continue
 
         video_id = prepare_feature(video['id'])
         snippet = video['snippet']
         statistics = video['statistics']
+        content_details = video['contentDetails']
 
         features = [prepare_feature(snippet.get(feature, "")) for feature in snippet_features]
 
@@ -115,10 +123,11 @@ def get_videos(items):
         thumbnail_link = snippet.get("thumbnails", {}).get("default", {}).get("url", "")
         trending_date = time.strftime("%y.%d.%m")
         tags = get_tags(snippet.get("tags", ["[none]"]))
-        view_count = statistics.get("viewCount", 0)
+        
+        view_count = int(statistics.get("viewCount", 0))
 
-        likes = statistics.get('likeCount', 0)
-        comment_count = statistics.get('commentCount', 0)
+        likes = int(statistics.get('likeCount', 0))
+        comment_count = int(statistics.get('commentCount', 0))
 
         if 'likeCount' not in statistics:
             ratings_disabled = True
@@ -127,15 +136,19 @@ def get_videos(items):
         if 'commentCount' not in statistics:
             comments_disabled = True
             comment_count = 0
+        
+        channel_id = snippet.get("channelId", "")
+        subscriber_count = get_subscriber_count(api_key, channel_id)
+        engagement_rate = (likes + comment_count) / view_count if view_count else 0
+        duration = content_details.get('duration', '')
+        region_restriction = content_details.get('regionRestriction', {}).get('allowed', 'None')
 
         line = [video_id] + features + [prepare_feature(category)] + [prepare_feature(x) for x in [
-            trending_date, tags, view_count, likes, 0,  # Dislikes are no longer available
-            comment_count, thumbnail_link, comments_disabled,
-            ratings_disabled, description
+            trending_date, tags, duration, view_count, likes, 0,  # Dislikes are no longer available
+            comment_count, subscriber_count, engagement_rate, thumbnail_link, description, region_restriction
         ]]
         lines.append(",".join(line))
     return lines
-
 
 def get_pages(api_key, country_code):
     country_data = []
@@ -146,10 +159,9 @@ def get_pages(api_key, country_code):
         next_page_token = video_data_page.get("nextPageToken", None)
 
         items = video_data_page.get('items', [])
-        country_data += get_videos(items)
+        country_data += get_videos(api_key, items)
 
     return country_data
-
 
 def write_to_file(output_dir, country_code, country_data):
     print(f"Writing {country_code} data to file...")
@@ -162,12 +174,10 @@ def write_to_file(output_dir, country_code, country_data):
         for row in country_data:
             file.write(f"{row}\n")
 
-
 def get_data(api_key, country_codes, output_dir):
     for country_code in country_codes:
         country_data = [",".join(header)] + get_pages(api_key, country_code)
         write_to_file(output_dir, country_code, country_data)
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
