@@ -11,7 +11,7 @@ snippet_features = ["title", "publishedAt", "channelId", "channelTitle"]
 unsafe_characters = ['\n', '"']
 
 # Column headers
-header = ["video_id"] + snippet_features + ["category", "trending_date", "tags", "duration", "view_count", "likes", "dislikes",
+header = ["video_id"] + snippet_features + ["category", "trending_date", "tags", "duration_seconds", "view_count", "likes", "dislikes",
                                             "comment_count", "subscriber_count", "engagement_rate", "thumbnail_link", "description", "region_restriction"]
 
 # Category mapping
@@ -121,7 +121,7 @@ def get_videos(api_key, items):
 
         description = snippet.get("description", "")
         thumbnail_link = snippet.get("thumbnails", {}).get("default", {}).get("url", "")
-        trending_date = time.strftime("%y.%d.%m")
+        trending_date = time.strftime("%y.%m.%d")
         tags = get_tags(snippet.get("tags", ["[none]"]))
         
         view_count = int(statistics.get("viewCount", 0))
@@ -140,7 +140,7 @@ def get_videos(api_key, items):
         channel_id = snippet.get("channelId", "")
         subscriber_count = get_subscriber_count(api_key, channel_id)
         engagement_rate = (likes + comment_count) / view_count if view_count else 0
-        duration = content_details.get('duration', '')
+        duration = reformat_duration(content_details.get('duration', ''))
         region_restriction = content_details.get('regionRestriction', {}).get('allowed', 'None')
 
         line = [video_id] + features + [prepare_feature(category)] + [prepare_feature(x) for x in [
@@ -149,6 +149,34 @@ def get_videos(api_key, items):
         ]]
         lines.append(",".join(line))
     return lines
+
+def reformat_duration(original):
+    duration_seconds = 0
+    iteration = ""
+    keys = []
+    values = []
+    
+    #Seperate hours, minutes and seconds
+    for i in range(2, len(original)):
+        if original[i].isdigit():
+            iteration += original[i]
+        else:
+            keys.append(original[i])
+            values.append(int(iteration))
+            iteration = ""
+    
+    #Calculate duration in seconds
+    for i in range(len(keys)):
+        key = keys[i]
+        value = values[i]
+        if key == 'H':
+            duration_seconds += 3600 * value
+        elif key == 'M':
+            duration_seconds += 60 * value
+        elif key == 'S':
+            duration_seconds += value
+    
+    return str(duration_seconds)
 
 def get_pages(api_key, country_code):
     country_data = []
@@ -169,7 +197,7 @@ def write_to_file(output_dir, country_code, country_data):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    file_path = os.path.join(output_dir, f"{time.strftime('%y.%d.%m')}_{country_code}_videos.csv")
+    file_path = os.path.join(output_dir, f"{time.strftime('%y.%m.%d')}_{country_code}_videos.csv")
     with open(file_path, "w+", encoding='utf-8') as file:
         for row in country_data:
             file.write(f"{row}\n")
@@ -189,3 +217,4 @@ if __name__ == "__main__":
 
     api_key, country_codes = setup(args.key_path, args.country_code_path)
     get_data(api_key, country_codes, args.output_dir)
+    print('FINISHED!')
