@@ -3,16 +3,16 @@ import sys
 import time
 import os
 import argparse
+import isodate
+from datetime import timedelta
 
-# List of features to collect
-snippet_features = ["title", "publishedAt", "channelId", "channelTitle"]
+# List of snippet features to collect
+snippet_features = ["title", "publishedAt", "channelTitle"]
 
-# Characters to exclude
-unsafe_characters = ['\n', '"']
-
-# Column headers
-header = ["video_id"] + snippet_features + ["category", "trending_date", "tags", "duration", "view_count", "likes", "dislikes",
-                                            "comment_count", "subscriber_count", "engagement_rate", "thumbnail_link", "description", "region_restriction"]
+# Column headers for the CSV (only the properties you requested)
+header = ["title", "publishedAt", "channelTitle", "category", "tags", "duration", 
+          "live_content", "view_count", "likes", "comment_count", 
+          "subscriber_count", "engagement_rate", "total_view_count", "channel_country"]
 
 # Category mapping
 category_mapping = {
@@ -87,65 +87,91 @@ def api_request(api_key, page_token, country_code):
 def get_tags(tags_list):
     return prepare_feature("|".join(tags_list))
 
-def get_subscriber_count(api_key, channel_id):
+def get_channel_stats(api_key, channel_id):
+    """
+    Fetch channel statistics: subscriber count, total view count, and country.
+    """
     url = (
         f"https://www.googleapis.com/youtube/v3/channels"
-        f"?part=statistics&id={channel_id}&key={api_key}"
+        f"?part=snippet,statistics&id={channel_id}&key={api_key}"
     )
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
-        return data['items'][0]['statistics'].get('subscriberCount', 0)
+        stats = data['items'][0]['statistics']
+        snippet = data['items'][0]['snippet']
+        
+        # Get subscriber count and total view count
+        subscriber_count = stats.get('subscriberCount', 0)
+        total_view_count = stats.get('viewCount', 0)
+        
+        # Get the country (if available)
+        channel_country = snippet.get('country', 'Unknown')
+
+        return int(subscriber_count), int(total_view_count), channel_country
     else:
-        print(f"Error fetching subscriber count: {response.status_code}")
-        return 0
+        print(f"Error fetching channel stats: {response.status_code}")
+        return 0, 0, 'Unknown'
+
+def parse_duration(duration_str):
+    """Convert ISO 8601 duration to decimal minutes."""
+    if not duration_str:
+        return 0.0  # Default to 0 minutes if the duration is missing
+    try:
+        # Parse the ISO 8601 duration string to a timedelta object
+        duration = isodate.parse_duration(duration_str)
+        if isinstance(duration, timedelta):
+            # Convert the duration to total minutes
+            total_minutes = duration.total_seconds() / 60
+            return round(total_minutes, 2)  # Round to 2 decimal places for clarity
+        else:
+            return 0.0  # In case the parsing fails, return 0 minutes
+    except isodate.ISO8601Error:
+        return 0.0  # Return 0 if parsing the duration fails
 
 def get_videos(api_key, items):
     lines = []
     for video in items:
-        comments_disabled = False
-        ratings_disabled = False
-
         if "statistics" not in video or "contentDetails" not in video:
             continue
 
-        video_id = prepare_feature(video['id'])
         snippet = video['snippet']
         statistics = video['statistics']
         content_details = video['contentDetails']
 
+        # Collecting required snippet features
         features = [prepare_feature(snippet.get(feature, "")) for feature in snippet_features]
 
+        # Map category
         category_id = snippet.get("categoryId", "")
         category = category_mapping.get(category_id, "Unknown")
 
-        description = snippet.get("description", "")
-        thumbnail_link = snippet.get("thumbnails", {}).get("default", {}).get("url", "")
-        trending_date = time.strftime("%y.%d.%m")
+        # Collect tags
         tags = get_tags(snippet.get("tags", ["[none]"]))
-        
-        view_count = int(statistics.get("viewCount", 0))
 
+        # Duration in minutes (decimal format)
+        duration_iso = content_details.get('duration', 'PT0S')  # Default to PT0S if missing
+        duration = parse_duration(duration_iso)
+
+        # Other fields
+        live_content = content_details.get('liveBroadcastContent', 'none')
+
+        # Statistics
+        view_count = int(statistics.get("viewCount", 0))
         likes = int(statistics.get('likeCount', 0))
         comment_count = int(statistics.get('commentCount', 0))
 
-        if 'likeCount' not in statistics:
-            ratings_disabled = True
-            likes = 0
-
-        if 'commentCount' not in statistics:
-            comments_disabled = True
-            comment_count = 0
-        
+        # Channel stats (subscriber count, total view count, and country)
         channel_id = snippet.get("channelId", "")
-        subscriber_count = get_subscriber_count(api_key, channel_id)
-        engagement_rate = (likes + comment_count) / view_count if view_count else 0
-        duration = content_details.get('duration', '')
-        region_restriction = content_details.get('regionRestriction', {}).get('allowed', 'None')
+        subscriber_count, total_view_count, channel_country = get_channel_stats(api_key, channel_id)
 
-        line = [video_id] + features + [prepare_feature(category)] + [prepare_feature(x) for x in [
-            trending_date, tags, duration, view_count, likes, 0,  # Dislikes are no longer available
-            comment_count, subscriber_count, engagement_rate, thumbnail_link, description, region_restriction
+        # Engagement rate
+        engagement_rate = (likes + comment_count) / view_count if view_count else 0
+
+        # Prepare the CSV line
+        line = features + [prepare_feature(category)] + [prepare_feature(x) for x in [
+            tags, duration, live_content, view_count, likes, comment_count, 
+            subscriber_count, engagement_rate, total_view_count, channel_country
         ]]
         lines.append(",".join(line))
     return lines
