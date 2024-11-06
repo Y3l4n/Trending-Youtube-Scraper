@@ -1,5 +1,11 @@
 # Trending YouTube Video Scraper
 
+## For people in my DS project group, please read this
+
+Use `scraper_to_use.py` script to fetch the newest CSV files. I have also updated the new CSV files in the form of `24.06.11_country_videos.csv` and the to-analyze countries in `country_codes.txt`. I need new ideas for visualizations, so need suggestions as well
+
+## Others
+
 All credits go to [mitchelljy's Youtube Scraper](https://github.com/mitchelljy/Trending-YouTube-Scraper), this is just an updated version of it.
 
 Originally used to build [this dataset](https://www.kaggle.com/datasnaek/youtube-new) on Kaggle, which has about 6 months worth of trending YouTube videos on it. This script will scrape the most relevant information from videos that are currently trending on YouTube in a specified set of countries. You can find example output files in the output directory.
