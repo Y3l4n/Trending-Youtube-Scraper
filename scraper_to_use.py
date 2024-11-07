@@ -5,9 +5,10 @@ import os
 import argparse
 import isodate
 from datetime import timedelta
+from datetime import datetime
 
 # List of snippet features to collect
-snippet_features = ["title", "publishedAt", "channelTitle"]
+snippet_features = ["title", "channelTitle"]
 
 # Column headers for the CSV (only the properties you requested)
 header = ["title", "publishedAt", "channelTitle", "category", "tags", "duration", 
@@ -149,6 +150,12 @@ def get_videos(api_key, items):
         # Collect tags
         tags = get_tags(snippet.get("tags", ["[none]"]))
 
+        # Published time convert from ISO format
+        publishedAt = snippet.get('publishedAt')
+        publishedAt = datetime.strptime(publishedAt, "%Y-%m-%dT%H:%M:%SZ")
+        publisheddate = publishedAt.date()
+        publishedTime = publishedAt.time()
+
         # Duration in minutes (decimal format)
         duration_iso = content_details.get('duration', 'PT0S')  # Default to PT0S if missing
         duration = parse_duration(duration_iso)
@@ -171,7 +178,8 @@ def get_videos(api_key, items):
         # Prepare the CSV line
         line = features + [prepare_feature(category)] + [prepare_feature(x) for x in [
             tags, duration, live_content, view_count, likes, comment_count, 
-            subscriber_count, engagement_rate, total_view_count, channel_country
+            subscriber_count, engagement_rate, total_view_count, channel_country, 
+            publisheddate, publishedTime
         ]]
         lines.append(",".join(line))
     return lines
