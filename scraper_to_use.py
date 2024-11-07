@@ -11,9 +11,10 @@ from datetime import datetime
 snippet_features = ["title", "channelTitle"]
 
 # Column headers for the CSV (only the properties you requested)
-header = ["title", "publishedAt", "channelTitle", "category", "tags", "duration", 
+header = ["title", "channelTitle", "category", "tags", "duration", 
           "live_content", "view_count", "likes", "comment_count", 
-          "subscriber_count", "engagement_rate", "total_view_count", "channel_country"]
+          "subscriber_count", "engagement_rate", "total_view_count",
+            "channel_country", "publishedDate", "publishedTime"]
 
 # Category mapping
 category_mapping = {
@@ -153,7 +154,7 @@ def get_videos(api_key, items):
         # Published time convert from ISO format
         publishedAt = snippet.get('publishedAt')
         publishedAt = datetime.strptime(publishedAt, "%Y-%m-%dT%H:%M:%SZ")
-        publisheddate = publishedAt.date()
+        publishedDate = publishedAt.date()
         publishedTime = publishedAt.time()
 
         # Duration in minutes (decimal format)
@@ -179,7 +180,7 @@ def get_videos(api_key, items):
         line = features + [prepare_feature(category)] + [prepare_feature(x) for x in [
             tags, duration, live_content, view_count, likes, comment_count, 
             subscriber_count, engagement_rate, total_view_count, channel_country, 
-            publisheddate, publishedTime
+            publishedDate, publishedTime
         ]]
         lines.append(",".join(line))
     return lines
